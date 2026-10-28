@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Расписание занятий</title>
+<style>
+  :root {
+    --bg: #f4f6fa;
+    --card: #ffffff;
+    --ink: #18233f;
+    --muted: #66708a;
+    --line: #dde2ee;
+    --accent: #2457d6;
+    --accent-soft: #e6edfc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1526;
+      --card: #172038;
+      --ink: #e8ecf7;
+      --muted: #9aa5c4;
+      --line: #28345a;
+      --accent: #6e96ff;
+      --accent-soft: #1e2c55;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 48px 20px 64px; }
+  h1 { font-size: clamp(1.8rem, 5vw, 2.6rem); margin: 0 0 8px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); margin: 0 0 32px; }
+
+  .picker { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 32px; }
+  .picker button {
+    font: inherit;
+    padding: 10px 16px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--card);
+    color: var(--ink);
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+  }
+  .picker button:hover { border-color: var(--accent); }
+  .picker button[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  .empty { color: var(--muted); padding: 28px; border: 2px dashed var(--line); border-radius: 14px; text-align: center; }
+
+  .table-box { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow-x: auto; }
+  .table-box h2 { margin: 0; padding: 18px 20px; font-size: 1.15rem; border-bottom: 1px solid var(--line); }
+  table { width: 100%; border-collapse: collapse; min-width: 520px; }
+  th, td { text-align: left; padding: 14px 20px; }
+  th { background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: .95rem; }
+  td { border-top: 1px solid var(--line); }
+  td:first-child, th:first-child { width: 70px; text-align: center; color: var(--muted); }
+  th:first-child { color: var(--accent); }
+  td:nth-child(4) { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  tbody tr:hover { background: var(--accent-soft); }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <h1>Расписание занятий</h1>
+  <p class="sub">Выберите специальность, и ниже появится расписание.</p>
+
+  <div class="picker" id="picker" role="group" aria-label="Специальности"></div>
+
+  <div id="output" aria-live="polite">
+    <div class="empty">Специальность пока не выбрана.</div>
+  </div>
+</main>
+
+<script>
+  // ============ ДАННЫЕ — МЕНЯЙ ЗДЕСЬ ============
+
+  // Время пар (одинаковое для всех специальностей, номер = порядок)
+  const TIMES = [
+    "08:30 – 10:00",
+    "10:10 – 11:40",
+    "11:50 – 13:20",
+    "14:00 – 15:30",
+    "15:40 – 17:10",
+    "17:20 – 18:50",
+    "19:00 – 20:30"
+  ];
+
+  // Каждая специальность: название + 7 пар [предмет, преподаватель]
+  const SPECIALTIES = [
+    { name: "Информатика", lessons: [
+      ["Программирование на Python", "Ахметов А.Б."],
+      ["Базы данных", "Серикова Д.Н."],
+      ["Алгоритмы и структуры данных", "Омаров Е.К."],
+      ["Веб-разработка", "Нурланова Г.М."],
+      ["Компьютерные сети", "Ким В.А."],
+      ["Дискретная математика", "Жумабаев Т.С."],
+      ["Английский для IT", "Исаева Л.Р."] ]},
+    { name: "Юриспруденция", lessons: [
+      ["Теория государства и права", "Касымов Б.А."],
+      ["Гражданское право", "Тулегенова А.Е."],
+      ["Уголовное право", "Сейтов Д.М."],
+      ["Конституционное право", "Абдрахманова С.К."],
+      ["Административное право", "Мукашев Н.Т."],
+      ["Римское право", "Оспанова Ж.Б."],
+      ["Юридический английский", "Петрова И.В."] ]},
+    { name: "Экономика", lessons: [
+      ["Микроэкономика", "Беков Р.Ж."],
+      ["Макроэкономика", "Даулетова М.А."],
+      ["Бухгалтерский учёт", "Садыков К.Н."],
+      ["Статистика", "Алиева З.Т."],
+      ["Финансы и кредит", "Нургалиев А.С."],
+      ["Маркетинг", "Тлеубаева Г.О."],
+      ["Деловой английский", "Смирнова Е.П."] ]},
+    { name: "Журналистика", lessons: [
+      ["Основы журналистики", "Кенжебаева А.Д."],
+      ["Сторителлинг", "Ержанов М.К."],
+      ["Тележурналистика", "Байжанова Л.С."],
+      ["Медиаэтика", "Рахимов Н.А."],
+      ["Фото и видео", "Ли С.Д."],
+      ["Редактирование текста", "Утегенова Ш.Б."],
+      ["Социальные сети и SMM", "Маратов Д.Е."] ]},
+    { name: "Педагогика", lessons: [
+      ["Общая педагогика", "Жаксыбекова Р.А."],
+      ["Возрастная психология", "Ибраева Н.К."],
+      ["Методика преподавания", "Токтаров С.М."],
+      ["Дидактика", "Аубакирова Б.Т."],
+      ["Инклюзивное образование", "Мусина Г.Е."],
+      ["Цифровые технологии в школе", "Орлов А.И."],
+      ["Педагогическая практика", "Сулейменова Д.Н."] ]},
+    { name: "Медицина", lessons: [
+      ["Анатомия человека", "Хасенов Е.Б."],
+      ["Физиология", "Байтурсынова А.К."],
+      ["Биохимия", "Досымов Т.Р."],
+      ["Микробиология", "Карпова О.Н."],
+      ["Фармакология", "Нуртазин М.С."],
+      ["Основы клинической практики", "Абишева Л.Д."],
+      ["Латинский язык", "Гусева Т.А."] ]},
+    { name: "Архитектура", lessons: [
+      ["История архитектуры", "Шаймерденов К.А."],
+      ["Архитектурное проектирование", "Бектурганова С.Е."],
+      ["Начертательная геометрия", "Волков Д.П."],
+      ["Рисунок и живопись", "Султанова А.Н."],
+      ["Строительные конструкции", "Едильбаев Н.М."],
+      ["3D-моделирование", "Аманжолов Р.К."],
+      ["Градостроительство", "Тажибаева М.Б."] ]},
+    { name: "Переводческое дело", lessons: [
+      ["Практика английского языка", "Джонсон Э."],
+      ["Теория перевода", "Мамытова К.Ш."],
+      ["Устный последовательный перевод", "Аскарова Д.Е."],
+      ["Письменный перевод", "Назарбекова Ф.А."],
+      ["Лингвистика", "Сатыбалдиев Н.Т."],
+      ["Казахский язык и культура речи", "Оразбаева Г.С."],
+      ["Страноведение", "Миллер К."] ]},
+    { name: "Психология", lessons: [
+      ["Общая психология", "Тастанбекова Л.А."],
+      ["Социальная психология", "Журсинов Е.Д."],
+      ["Психология личности", "Каримова Н.С."],
+      ["Психодиагностика", "Абдулина А.Т."],
+      ["Консультирование", "Бейсенов М.К."],
+      ["Статистика в психологии", "Лукьянова В.Н."],
+      ["Практикум по тренингу", "Калиева Ж.О."] ]},
+    { name: "Менеджмент", lessons: [
+      ["Основы менеджмента", "Ермекбаев А.Н."],
+      ["Управление проектами", "Сарсенова Д.К."],
+      ["Организационное поведение", "Кузнецов П.А."],
+      ["Управление персоналом", "Бисенова Г.Т."],
+      ["Стратегический менеджмент", "Мухамеджанов Б.Е."],
+      ["Предпринимательство", "Абилова С.М."],
+      ["Бизнес-коммуникации", "Ковалёва А.Д."] ]}
+  ];
+
+  // ============ КОД — ТРОГАТЬ НЕ НУЖНО ============
+
+  const picker = document.getElementById("picker");
+  const output = document.getElementById("output");
+
+  function showTable(index) {
+    const spec = SPECIALTIES[index];
+    const rows = spec.lessons.map((lesson, i) =>
+      `<tr>
+        <td>${i + 1}</td>
+        <td>${lesson[0]}</td>
+        <td>${lesson[1]}</td>
+        <td>${TIMES[i]}</td>
+      </tr>`).join("");
+
+    output.innerHTML = `
+      <div class="table-box">
+        <h2>${spec.name}</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>№ пары</th>
+              <th>Предмет</th>
+              <th>Преподаватель</th>
+              <th>Время</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+
+    picker.querySelectorAll("button").forEach((b, i) =>
+      b.setAttribute("aria-pressed", i === index ? "true" : "false"));
+  }
+
+  SPECIALTIES.forEach((spec, i) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = spec.name;
+    btn.setAttribute("aria-pressed", "false");
+    btn.addEventListener("click", () => showTable(i));
+    picker.appendChild(btn);
+  });
+</script>
+</body>
+</html>
