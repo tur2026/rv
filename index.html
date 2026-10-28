@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Расписание занятий</title>
+<style>
+  :root { --bg:#f4f6fa; --card:#fff; --ink:#18233f; --muted:#66708a; --line:#dde2ee; --accent:#2457d6; --accent-soft:#e6edfc; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1526; --card:#172038; --ink:#e8ecf7; --muted:#9aa5c4; --line:#28345a; --accent:#6e96ff; --accent-soft:#1e2c55; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--ink); line-height:1.5; }
+  .wrap { max-width:980px; margin:0 auto; padding:40px 20px 64px; }
+  h1 { font-size:clamp(1.8rem,5vw,2.5rem); margin:0 0 6px; letter-spacing:-0.02em; }
+  .sub { color:var(--muted); margin:0 0 24px; }
+  label { display:block; font-weight:600; margin-bottom:6px; }
+  .picker { position:relative; }
+  input[type=search] { width:100%; font:inherit; padding:12px 14px; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--ink); }
+  input:focus-visible, button:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+  .results { position:absolute; left:0; right:0; top:calc(100% + 6px); z-index:5; max-height:320px; overflow-y:auto; background:var(--card); border:1px solid var(--line); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.15); }
+  .results button { display:block; width:100%; text-align:left; font:inherit; padding:11px 14px; border:none; border-bottom:1px solid var(--line); background:none; color:var(--ink); cursor:pointer; }
+  .results button:hover, .results button[aria-selected="true"] { background:var(--accent-soft); }
+  .results .none { padding:14px; color:var(--muted); }
+  .groupinfo { color:var(--muted); font-size:.9rem; margin:8px 0 0; white-space:pre-line; }
+  .days { display:flex; flex-wrap:wrap; gap:8px; margin:24px 0; }
+  .days button { font:inherit; padding:9px 16px; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--ink); cursor:pointer; }
+  .days button:hover { border-color:var(--accent); }
+  .days button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .days button.free { color:var(--muted); }
+  .days button[aria-pressed="true"].free { color:#fff; }
+  .days .today::after { content:" •"; }
+  .empty { color:var(--muted); padding:28px; border:2px dashed var(--line); border-radius:14px; text-align:center; }
+  .table-box { background:var(--card); border:1px solid var(--line); border-radius:14px; overflow-x:auto; }
+  .table-box h2 { margin:0; padding:16px 20px; font-size:1.1rem; border-bottom:1px solid var(--line); }
+  table { width:100%; border-collapse:collapse; min-width:640px; }
+  th, td { text-align:left; padding:13px 20px; vertical-align:top; }
+  th { background:var(--accent-soft); color:var(--accent); font-weight:600; font-size:.95rem; }
+  td { border-top:1px solid var(--line); }
+  .num { width:70px; text-align:center; }
+  td.num { color:var(--muted); }
+  td.time { white-space:nowrap; font-variant-numeric:tabular-nums; }
+  tbody tr:hover { background:var(--accent-soft); }
+  .bar { display:flex; gap:12px; align-items:center; margin-top:20px; color:var(--muted); font-size:.85rem; }
+  .bar button { font:inherit; padding:6px 12px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink); cursor:pointer; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <h1>Расписание занятий</h1>
+  <p class="sub">Выбери специальность и день недели.</p>
+
+  <label for="q">Специальность</label>
+  <div class="picker" id="picker">
+    <input id="q" type="search" placeholder="Начни писать название или фамилию…" autocomplete="off" disabled>
+    <div class="results" id="results" role="listbox" hidden></div>
+  </div>
+  <p class="groupinfo" id="groupinfo"></p>
+
+  <div class="days" id="days" role="group" aria-label="Дни недели"></div>
+  <div id="output" aria-live="polite"></div>
+
+  <div class="bar">
+    <button type="button" id="refresh">Обновить</button>
+    <span id="updated"></span>
+  </div>
+</main>
+
+<script>
+  // ============ ССЫЛКА НА ТАБЛИЦУ ============
+  const SHEET_ID = "1qlJSZInOlr1ZPEjaWD3w8NP6u7pWNYxUR0IKZ43KH9M";
+  // Берётся первый лист таблицы
+  const CSV_URL = "https://docs.google.com/spreadsheets/d/" + SHEET_ID + "/gviz/tq?tqx=out:csv";
+
+  // ============ КОД ============
+  const DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+  const todayName = DAYS[(new Date().getDay() + 6) % 7];
+
+  const qEl = document.getElementById("q");
+  const resultsEl = document.getElementById("results");
+  const daysEl = document.getElementById("days");
+  const outEl = document.getElementById("output");
+  const infoEl = document.getElementById("groupinfo");
+
+  let groups = [];      // [{label, students, rows:[...]}]
+  let curDay = todayName;
+  let selLabel = null;
+  const current = () => groups.find(g => g.label === selLabel);
+
+  function parseCSV(text) {
+    const rows = []; let row = [], cur = "", q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) {
+        if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+        else cur += c;
+      } else if (c === '"') q = true;
+      else if (c === ",") { row.push(cur); cur = ""; }
+      else if (c === "\n") { row.push(cur); rows.push(row); row = []; cur = ""; }
+      else if (c !== "\r") cur += c;
+    }
+    if (cur !== "" || row.length) { row.push(cur); rows.push(row); }
+    return rows;
+  }
+
+  function build(rows) {
+    const head = rows[0].map(h => h.trim().toLowerCase());
+    const col = name => head.indexOf(name.toLowerCase());
+    const ix = {
+      spec: col("Специальность"), day: col("День"), num: col("№"),
+      subj: col("Предмет"), time: col("Время"), teach: col("Преподаватель"), room: col("Аудитория")
+    };
+    const map = new Map();
+    rows.slice(1).forEach(r => {
+      const spec = (r[ix.spec] || "").trim();
+      const day = (r[ix.day] || "").trim();
+      if (!spec || !day) return;
+      if (!map.has(spec)) map.set(spec, []);
+      map.get(spec).push({
+        day, num: parseFloat(r[ix.num]) || 0,
+        subj: (r[ix.subj] || "").trim(), time: (r[ix.time] || "").trim(),
+        teach: (r[ix.teach] || "").trim(), room: (r[ix.room] || "").trim()
+      });
+    });
+
+    // Название программы — до первой закрытой скобки, остальное — список студентов
+    const list = [...map.entries()].map(([full, lessons]) => {
+      const m = full.match(/^[^(]*\([^)]*\)/);
+      const label = (m ? m[0] : full.split("\n")[0]).trim();
+      const students = (m ? full.slice(m[0].length) : "").replace(/\s*\n\s*/g, "\n").trim();
+      return { label, students, rows: lessons };
+    });
+    const count = {}; list.forEach(g => count[g.label] = (count[g.label] || 0) + 1);
+    const seen = {};
+    list.forEach(g => {
+      if (count[g.label] > 1) { seen[g.label] = (seen[g.label] || 0) + 1; g.label += " · группа " + seen[g.label]; }
+    });
+    return list.sort((a, b) => a.label.localeCompare(b.label, "ru"));
+  }
+
+  function renderResults() {
+    const term = (qEl.value === selLabel ? "" : qEl.value).trim().toLowerCase();
+    const found = groups.filter(g => !term || (g.label + " " + g.students).toLowerCase().includes(term));
+    resultsEl.replaceChildren();
+    if (!found.length) resultsEl.append(cell("div", "Ничего не найдено.", "none"));
+    found.forEach(g => {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = g.label;
+      b.setAttribute("aria-selected", g.label === selLabel ? "true" : "false");
+      b.onclick = () => choose(g);
+      resultsEl.append(b);
+    });
+    resultsEl.hidden = false;
+  }
+
+  function choose(g) {
+    selLabel = g.label; qEl.value = g.label; resultsEl.hidden = true;
+    renderDays(); renderTable();
+  }
+
+  function renderDays() {
+    daysEl.replaceChildren();
+    const g = current();
+    DAYS.forEach(d => {
+      const has = g && g.rows.some(r => r.day === d);
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = d;
+      b.className = (has || !g ? "" : "free") + (d === todayName ? " today" : "");
+      b.setAttribute("aria-pressed", d === curDay ? "true" : "false");
+      b.onclick = () => { curDay = d; renderDays(); renderTable(); };
+      daysEl.append(b);
+    });
+  }
+
+  function cell(tag, text, cls) {
+    const c = document.createElement(tag); c.textContent = text; if (cls) c.className = cls; return c;
+  }
+
+  function renderTable() {
+    outEl.replaceChildren();
+    const g = current();
+    infoEl.textContent = g ? g.students : "";
+    if (!g) { outEl.append(cell("div", "Специальность пока не выбрана.", "empty")); return; }
+
+    const lessons = g.rows.filter(r => r.day === curDay).sort((a, b) => a.num - b.num);
+    if (!lessons.length) { outEl.append(cell("div", "В этот день занятий нет.", "empty")); return; }
+
+    const box = document.createElement("div"); box.className = "table-box";
+    box.append(cell("h2", g.label + " — " + curDay));
+    const table = document.createElement("table");
+    const hr = document.createElement("tr");
+    [["№ пары", "num"], ["Предмет"], ["Время"], ["Преподаватель"], ["Аудитория"]]
+      .forEach(([t, c]) => hr.append(cell("th", t, c)));
+    const thead = document.createElement("thead"); thead.append(hr);
+    const tbody = document.createElement("tbody");
+    lessons.forEach(l => {
+      const tr = document.createElement("tr");
+      tr.append(cell("td", l.num || "", "num"), cell("td", l.subj), cell("td", l.time, "time"),
+                cell("td", l.teach), cell("td", l.room));
+      tbody.append(tr);
+    });
+    table.append(thead, tbody); box.append(table); outEl.append(box);
+  }
+
+  async function loadData() {
+    document.getElementById("updated").textContent = "Загрузка…";
+    try {
+      const res = await fetch(CSV_URL + "&_=" + Date.now());
+      if (!res.ok) throw new Error(res.status);
+      groups = build(parseCSV(await res.text()));
+      qEl.disabled = false;
+      const g = current(); if (g) qEl.value = g.label; else selLabel = null;
+      renderDays(); renderTable();
+      if (!resultsEl.hidden) renderResults();
+      document.getElementById("updated").textContent =
+        "Обновлено в " + new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    } catch (e) {
+      outEl.replaceChildren(cell("div", "Не получилось загрузить таблицу. Проверь интернет и доступ к таблице («Все, у кого есть ссылка» → «Читатель»).", "empty"));
+      document.getElementById("updated").textContent = "";
+    }
+  }
+
+  qEl.addEventListener("focus", () => { qEl.select(); renderResults(); });
+  qEl.addEventListener("input", renderResults);
+  qEl.addEventListener("keydown", e => {
+    if (e.key === "Escape") resultsEl.hidden = true;
+    if (e.key === "Enter") { const b = resultsEl.querySelector("button"); if (b) b.click(); }
+  });
+  document.addEventListener("click", e => { if (!e.target.closest("#picker")) resultsEl.hidden = true; });
+  document.getElementById("refresh").onclick = loadData;
+  renderDays();
+  loadData();
+</script>
+</body>
+</html>
