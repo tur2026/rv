@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Расписание · Туран</title>
+<style>
+  :root { --bg:#eef2fb; --card:#fff; --ink:#14203d; --muted:#65708c; --line:#e0e6f3; --accent:#2457d6; --accent2:#e0a526; --soft:#eaf0ff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0b1122; --card:#141d36; --ink:#e8ecf7; --muted:#9aa5c4; --line:#26335a; --accent:#6e96ff; --accent2:#f0c050; --soft:#1c2b55; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--ink); line-height:1.5; }
+
+  /* ---------- Шапка ---------- */
+  .hero { position:relative; overflow:hidden; color:#fff; padding:28px 20px 110px;
+    background:linear-gradient(135deg,#0d1f5c 0%,#1d44b8 55%,#3a6df0 100%); }
+  .blob { position:absolute; border-radius:50%; filter:blur(2px); opacity:.35; animation:float 9s ease-in-out infinite; }
+  .b1 { width:260px; height:260px; background:#5b8cff; top:-80px; right:-60px; }
+  .b2 { width:160px; height:160px; background:var(--accent2); bottom:-50px; left:8%; animation-delay:-3s; opacity:.28; }
+  .b3 { width:90px; height:90px; background:#fff; top:40%; left:62%; animation-delay:-6s; opacity:.12; }
+  @keyframes float { 0%,100% { transform:translateY(0) scale(1); } 50% { transform:translateY(-22px) scale(1.06); } }
+  .hero-in { position:relative; max-width:980px; margin:0 auto; }
+  .lang { display:flex; justify-content:flex-end; }
+  .lang div { display:flex; background:rgba(255,255,255,.16); border-radius:999px; padding:4px; backdrop-filter:blur(6px); }
+  .lang button { font:inherit; font-weight:600; border:none; background:none; color:#fff; padding:6px 16px; border-radius:999px; cursor:pointer; transition:background .25s,color .25s; }
+  .lang button[aria-pressed="true"] { background:#fff; color:#1d44b8; }
+  .welcome { margin:44px 0 0; }
+  .welcome small { display:block; font-size:clamp(1rem,3vw,1.25rem); opacity:.85; animation:rise .8s .1s both; }
+  .welcome h1 { margin:6px 0 0; font-size:clamp(1.9rem,6vw,3.2rem); line-height:1.15; letter-spacing:-0.02em; animation:rise .8s .25s both; }
+  .welcome h1 span { color:var(--accent2); }
+  .tagline { margin:14px 0 0; max-width:560px; opacity:.85; animation:rise .8s .4s both; }
+  @keyframes rise { from { opacity:0; transform:translateY(22px); } to { opacity:1; transform:none; } }
+
+  /* ---------- Карточка ---------- */
+  .wrap { max-width:980px; margin:-70px auto 0; padding:0 20px 60px; position:relative; }
+  .card { background:var(--card); border-radius:20px; padding:26px; box-shadow:0 18px 50px rgba(13,31,92,.18); animation:rise .8s .55s both; }
+  label { display:block; font-weight:700; margin-bottom:8px; }
+  .picker { position:relative; }
+  input[type=search] { width:100%; font:inherit; padding:14px 16px; border:2px solid var(--line); border-radius:12px; background:var(--bg); color:var(--ink); transition:border-color .2s, box-shadow .2s; }
+  input[type=search]:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 4px var(--soft); }
+  button:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+  .results { position:absolute; left:0; right:0; top:calc(100% + 8px); z-index:5; max-height:320px; overflow-y:auto; background:var(--card); border:1px solid var(--line); border-radius:12px; box-shadow:0 14px 34px rgba(0,0,0,.2); animation:pop .18s both; }
+  @keyframes pop { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
+  .results button { display:block; width:100%; text-align:left; font:inherit; padding:12px 16px; border:none; border-bottom:1px solid var(--line); background:none; color:var(--ink); cursor:pointer; transition:background .15s, padding-left .15s; }
+  .results button:hover, .results button[aria-selected="true"] { background:var(--soft); padding-left:22px; }
+  .results .none { padding:16px; color:var(--muted); }
+  .groupinfo { color:var(--muted); font-size:.9rem; margin:10px 0 0; white-space:pre-line; }
+
+  .days { display:flex; flex-wrap:wrap; gap:8px; margin:22px 0; }
+  .days button { font:inherit; font-weight:600; min-width:54px; padding:10px 16px; border:2px solid var(--line); border-radius:12px; background:var(--card); color:var(--ink); cursor:pointer; transition:transform .15s, background .2s, border-color .2s, color .2s; }
+  .days button:hover { border-color:var(--accent); transform:translateY(-2px); }
+  .days button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .days button.free { color:var(--muted); }
+  .days button[aria-pressed="true"].free { color:#fff; }
+  .days .today { position:relative; }
+  .days .today::after { content:""; position:absolute; top:5px; right:6px; width:7px; height:7px; border-radius:50%; background:var(--accent2); }
+
+  .empty { color:var(--muted); padding:34px; border:2px dashed var(--line); border-radius:14px; text-align:center; animation:rise .5s both; }
+  .table-box { border:1px solid var(--line); border-radius:14px; overflow-x:auto; animation:rise .5s both; }
+  .table-box h2 { margin:0; padding:16px 20px; font-size:1.1rem; border-bottom:1px solid var(--line); }
+  table { width:100%; border-collapse:collapse; min-width:640px; }
+  th, td { text-align:left; padding:14px 20px; vertical-align:top; }
+  th { background:var(--soft); color:var(--accent); font-weight:700; font-size:.92rem; }
+  td { border-top:1px solid var(--line); }
+  tbody tr { animation:rise .5s both; animation-delay:calc(var(--i) * 70ms); transition:background .15s; }
+  tbody tr:hover { background:var(--soft); }
+  .num { width:80px; text-align:center; }
+  td.num { color:var(--accent2); font-weight:700; font-size:1.05rem; }
+  td.time { white-space:nowrap; font-variant-numeric:tabular-nums; }
+
+  .bar { display:flex; gap:12px; align-items:center; margin-top:22px; color:var(--muted); font-size:.85rem; }
+  .bar button { font:inherit; padding:7px 14px; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--ink); cursor:pointer; transition:background .2s; }
+  .bar button:hover { background:var(--soft); }
+  footer { text-align:center; color:var(--muted); font-size:.85rem; padding-bottom:36px; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation:none !important; transition:none !important; } }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+  <div class="hero-in">
+    <div class="lang"><div role="group" aria-label="Language">
+      <button type="button" data-lang="ru" aria-pressed="true">RU</button>
+      <button type="button" data-lang="kk" aria-pressed="false">ҚАЗ</button>
+    </div></div>
+    <div class="welcome">
+      <small data-i18n="hello"></small>
+      <h1><span data-i18n="who"></span></h1>
+      <p class="tagline" data-i18n="tagline"></p>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="card">
+    <label for="q" data-i18n="spec"></label>
+    <div class="picker" id="picker">
+      <input id="q" type="search" autocomplete="off" disabled>
+      <div class="results" id="results" role="listbox" hidden></div>
+    </div>
+    <p class="groupinfo" id="groupinfo"></p>
+
+    <div class="days" id="days" role="group"></div>
+    <div id="output" aria-live="polite"></div>
+
+    <div class="bar">
+      <button type="button" id="refresh" data-i18n="refresh"></button>
+      <span id="updated"></span>
+    </div>
+  </section>
+</main>
+<footer data-i18n="footer"></footer>
+
+<script>
+  // ============ ССЫЛКА НА ТАБЛИЦУ ============
+  const SHEET_ID = "1qlJSZInOlr1ZPEjaWD3w8NP6u7pWNYxUR0IKZ43KH9M";
+  const CSV_URL = "https://docs.google.com/spreadsheets/d/" + SHEET_ID + "/gviz/tq?tqx=out:csv";
+
+  // ============ ПЕРЕВОДЫ (меняй здесь) ============
+  const T = {
+    ru: {
+      hello: "Добро пожаловать,", who: "слушатели университета Туран",
+      tagline: "Найди свою специальность, выбери день недели и узнай расписание.",
+      spec: "Специальность", ph: "Начни писать название или фамилию…",
+      none: "Ничего не найдено.", noSel: "Специальность пока не выбрана.", noLessons: "В этот день занятий нет.",
+      num: "№ пары", subj: "Предмет", time: "Время", teach: "Преподаватель", room: "Аудитория",
+      refresh: "Обновить", updated: "Обновлено в ", loading: "Загрузка…", group: "группа",
+      error: "Не получилось загрузить таблицу. Проверь интернет и попробуй ещё раз.",
+      footer: "Университет Туран · Расписание занятий",
+      days: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+    },
+    kk: {
+      hello: "Қош келдіңіздер,", who: "Тұран университетінің тыңдаушылары",
+      tagline: "Мамандығыңды тауып, апта күнін таңда да, сабақ кестесін біл.",
+      spec: "Мамандық", ph: "Атауын немесе тегін жаза бастаңыз…",
+      none: "Ештеңе табылмады.", noSel: "Мамандық әлі таңдалған жоқ.", noLessons: "Бұл күні сабақ жоқ.",
+      num: "Пара №", subj: "Пән", time: "Уақыты", teach: "Оқытушы", room: "Аудитория",
+      refresh: "Жаңарту", updated: "Жаңартылды: ", loading: "Жүктелуде…", group: "топ",
+      error: "Кестені жүктеу мүмкін болмады. Интернетті тексеріп, қайталап көріңіз.",
+      footer: "Тұран университеті · Сабақ кестесі",
+      days: ["Дс", "Сс", "Ср", "Бс", "Жм", "Сб", "Жс"]
+    }
+  };
+
+  // ============ КОД ============
+  const DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]; // так написано в таблице
+  const todayIdx = (new Date().getDay() + 6) % 7;
+
+  let lang = "ru";
+  try { lang = localStorage.getItem("lang") === "kk" ? "kk" : "ru"; } catch (e) {}
+  const t = () => T[lang];
+
+  const qEl = document.getElementById("q");
+  const resultsEl = document.getElementById("results");
+  const daysEl = document.getElementById("days");
+  const outEl = document.getElementById("output");
+  const infoEl = document.getElementById("groupinfo");
+  const updEl = document.getElementById("updated");
+
+  let groups = [], curDay = DAYS[todayIdx], selKey = null, lastUpdate = null, failed = false;
+  const current = () => groups.find(g => g.key === selKey);
+  const labelOf = g => g.base + (g.n ? " · " + t().group + " " + g.n : "");
+
+  function cell(tag, text, cls) { const c = document.createElement(tag); c.textContent = text; if (cls) c.className = cls; return c; }
+
+  function parseCSV(text) {
+    const rows = []; let row = [], cur = "", q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+      else if (c === '"') q = true;
+      else if (c === ",") { row.push(cur); cur = ""; }
+      else if (c === "\n") { row.push(cur); rows.push(row); row = []; cur = ""; }
+      else if (c !== "\r") cur += c;
+    }
+    if (cur !== "" || row.length) { row.push(cur); rows.push(row); }
+    return rows;
+  }
+
+  function build(rows) {
+    const head = rows[0].map(h => h.trim().toLowerCase());
+    const col = n => head.indexOf(n.toLowerCase());
+    const ix = { spec: col("Специальность"), day: col("День"), num: col("№"), subj: col("Предмет"),
+                 time: col("Время"), teach: col("Преподаватель"), room: col("Аудитория") };
+    const map = new Map();
+    rows.slice(1).forEach(r => {
+      const spec = (r[ix.spec] || "").trim(), day = (r[ix.day] || "").trim();
+      if (!spec || !day) return;
+      if (!map.has(spec)) map.set(spec, []);
+      map.get(spec).push({ day, num: parseFloat(r[ix.num]) || 0, subj: (r[ix.subj] || "").trim(),
+        time: (r[ix.time] || "").trim(), teach: (r[ix.teach] || "").trim(), room: (r[ix.room] || "").trim() });
+    });
+    const list = [...map.entries()].map(([full, rows]) => {
+      const m = full.match(/^[^(]*\([^)]*\)/);
+      return { key: full, base: (m ? m[0] : full.split("\n")[0]).trim(), n: 0, rows,
+               students: (m ? full.slice(m[0].length) : "").replace(/\s*\n\s*/g, "\n").trim() };
+    });
+    const count = {}, seen = {};
+    list.forEach(g => count[g.base] = (count[g.base] || 0) + 1);
+    list.forEach(g => { if (count[g.base] > 1) { seen[g.base] = (seen[g.base] || 0) + 1; g.n = seen[g.base]; } });
+    return list.sort((a, b) => labelOf(a).localeCompare(labelOf(b), "ru"));
+  }
+
+  function renderResults() {
+    const cur = current();
+    const term = (cur && qEl.value === labelOf(cur) ? "" : qEl.value).trim().toLowerCase();
+    const found = groups.filter(g => !term || (labelOf(g) + " " + g.students).toLowerCase().includes(term));
+    resultsEl.replaceChildren();
+    if (!found.length) resultsEl.append(cell("div", t().none, "none"));
+    found.forEach(g => {
+      const b = cell("button", labelOf(g)); b.type = "button";
+      b.setAttribute("aria-selected", g.key === selKey ? "true" : "false");
+      b.onclick = () => choose(g);
+      resultsEl.append(b);
+    });
+    resultsEl.hidden = false;
+  }
+
+  function choose(g) { selKey = g.key; qEl.value = labelOf(g); resultsEl.hidden = true; renderDays(); renderTable(); }
+
+  function renderDays() {
+    daysEl.replaceChildren();
+    const g = current();
+    DAYS.forEach((d, i) => {
+      const has = g && g.rows.some(r => r.day === d);
+      const b = cell("button", t().days[i]); b.type = "button";
+      b.className = (has || !g ? "" : "free") + (i === todayIdx ? " today" : "");
+      b.setAttribute("aria-pressed", d === curDay ? "true" : "false");
+      b.onclick = () => { curDay = d; renderDays(); renderTable(); };
+      daysEl.append(b);
+    });
+  }
+
+  function renderTable() {
+    outEl.replaceChildren();
+    const g = current();
+    infoEl.textContent = g ? g.students : "";
+    if (failed) { outEl.append(cell("div", t().error, "empty")); return; }
+    if (!g) { outEl.append(cell("div", t().noSel, "empty")); return; }
+    const lessons = g.rows.filter(r => r.day === curDay).sort((a, b) => a.num - b.num);
+    if (!lessons.length) { outEl.append(cell("div", t().noLessons, "empty")); return; }
+
+    const box = document.createElement("div"); box.className = "table-box";
+    box.append(cell("h2", labelOf(g) + " — " + t().days[DAYS.indexOf(curDay)]));
+    const table = document.createElement("table");
+    const hr = document.createElement("tr");
+    [["num", "num"], ["subj"], ["time"], ["teach"], ["room"]].forEach(([k, c]) => hr.append(cell("th", t()[k], c)));
+    const thead = document.createElement("thead"); thead.append(hr);
+    const tbody = document.createElement("tbody");
+    lessons.forEach((l, i) => {
+      const tr = document.createElement("tr"); tr.style.setProperty("--i", i);
+      tr.append(cell("td", l.num || "", "num"), cell("td", l.subj), cell("td", l.time, "time"), cell("td", l.teach), cell("td", l.room));
+      tbody.append(tr);
+    });
+    table.append(thead, tbody); box.append(table); outEl.append(box);
+  }
+
+  function renderUpdated() {
+    updEl.textContent = lastUpdate ? t().updated + lastUpdate : "";
+  }
+
+  function applyLang() {
+    document.documentElement.lang = lang;
+    document.querySelectorAll("[data-i18n]").forEach(e => e.textContent = t()[e.dataset.i18n]);
+    qEl.placeholder = t().ph;
+    document.querySelectorAll("[data-lang]").forEach(b => b.setAttribute("aria-pressed", b.dataset.lang === lang ? "true" : "false"));
+    const g = current(); if (g) qEl.value = labelOf(g);
+    if (!resultsEl.hidden) renderResults();
+    renderDays(); renderTable(); renderUpdated();
+  }
+
+  async function loadData() {
+    updEl.textContent = t().loading;
+    try {
+      const res = await fetch(CSV_URL + "&_=" + Date.now());
+      if (!res.ok) throw new Error(res.status);
+      groups = build(parseCSV(await res.text()));
+      failed = false; qEl.disabled = false;
+      if (selKey && !current()) { selKey = null; qEl.value = ""; }
+      lastUpdate = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    } catch (e) { failed = true; lastUpdate = null; }
+    applyLang();
+  }
+
+  document.querySelectorAll("[data-lang]").forEach(b => b.onclick = () => {
+    lang = b.dataset.lang;
+    try { localStorage.setItem("lang", lang); } catch (e) {}
+    applyLang();
+  });
+  qEl.addEventListener("focus", () => { qEl.select(); renderResults(); });
+  qEl.addEventListener("input", renderResults);
+  qEl.addEventListener("keydown", e => {
+    if (e.key === "Escape") resultsEl.hidden = true;
+    if (e.key === "Enter") { const b = resultsEl.querySelector("button"); if (b) b.click(); }
+  });
+  document.addEventListener("click", e => { if (!e.target.closest("#picker")) resultsEl.hidden = true; });
+  document.getElementById("refresh").onclick = loadData;
+
+  applyLang();
+  loadData();
+</script>
+</body>
+</html>
